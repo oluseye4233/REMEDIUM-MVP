@@ -26,8 +26,9 @@ export async function POST(req: Request) {
         if (!userId) break
 
         if (session.mode === 'subscription') {
-          // Subscription purchase
-          const credits = 10
+          // Annual plan gets 120 credits; monthly gets 10
+          const planId = session.metadata?.plan || 'personal_monthly'
+          const credits = planId === 'personal_annual' ? 120 : 10
           await supabase.rpc('add_credits', { p_user_id: userId, p_amount: credits })
           await supabase.from('subscriptions').upsert({
             user_id: userId,
@@ -68,9 +69,9 @@ export async function POST(req: Request) {
         const { data: profile } = await supabase.from('profiles').select('id').eq('stripe_customer_id', customerId).single()
         if (!profile) break
 
-        // Look up plan to award correct renewal credits (annual = 120, monthly = 10)
-        const { data: sub } = await supabase.from('subscriptions').select('plan').eq('user_id', profile.id).single()
-        const renewalCredits = sub?.plan === 'personal_annual' ? 120 : 10
+        // Use credits_included to distinguish annual (120) from monthly (10)
+        const { data: sub } = await supabase.from('subscriptions').select('credits_included').eq('user_id', profile.id).single()
+        const renewalCredits = (sub?.credits_included ?? 10) >= 120 ? 120 : 10
 
         await supabase.rpc('add_credits', { p_user_id: profile.id, p_amount: renewalCredits })
         await supabase.from('subscriptions').update({
