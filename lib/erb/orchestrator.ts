@@ -41,12 +41,12 @@ export async function generateHIR(
     // Step 6: L2 NPF regex check
     const { pass, flags } = l2RegexCheck(JSON.stringify(content))
     if (!pass) {
-      // Log violation
+      const NPF_SAMPLE_LENGTH = 500
       await supabase.from('npf_violations').insert({
         user_id: userId,
         hir_id: hirId,
         patterns: flags,
-        content_sample: JSON.stringify(content).substring(0, 500),
+        content_sample: JSON.stringify(content).substring(0, NPF_SAMPLE_LENGTH),
       })
       // Refund credit
       await supabase.rpc('refund_credit', { p_user_id: userId, p_hir_id: hirId })

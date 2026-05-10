@@ -45,8 +45,13 @@ export async function middleware(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    if (profile && profile.cvs_status !== 'verified') {
-      return NextResponse.redirect(new URL('/cvs/status?reason=unverified', request.url))
+    if (profile) {
+      if (profile.cvs_status === 'conditionally_verified') {
+        return NextResponse.redirect(new URL('/cvs/status?reason=pending_review', request.url))
+      }
+      if (profile.cvs_status !== 'verified') {
+        return NextResponse.redirect(new URL('/cvs/status?reason=unverified', request.url))
+      }
     }
   }
 

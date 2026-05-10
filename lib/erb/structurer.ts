@@ -12,7 +12,7 @@ function extractSection(text: string, sectionHeader: string): string {
     const match = text.match(pattern)
     if (match && match[1]?.trim()) return match[1].trim()
   }
-  return ''
+  return '[Section content unavailable — please regenerate this report]'
 }
 
 function extractCitations(text: string): string[] {

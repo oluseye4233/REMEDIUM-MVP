@@ -4,6 +4,14 @@ import { createClient } from '@/lib/supabase/server'
 import { groPreFlight } from '@/lib/erb/gro'
 import { routeAtlasPrompts } from '@/lib/erb/atlas-router'
 import { generateHIR } from '@/lib/erb/orchestrator'
+import type { GROMode } from '@/types'
+
+const GRO_SEVERITY: Record<GROMode, number> = { LIFE: 0, SAFE_LIFE: 1, CONTAINMENT: 2 }
+const GRO_BY_LEVEL: GROMode[] = ['LIFE', 'SAFE_LIFE', 'CONTAINMENT']
+
+function elevateGROMode(profileMode: GROMode, preFlightMode: GROMode): GROMode {
+  return GRO_BY_LEVEL[Math.max(GRO_SEVERITY[profileMode], GRO_SEVERITY[preFlightMode])]
+}
 
 const schema = z.object({
   report_type: z.enum(['standard', 'integrative', 'pharmacognosy', 'nutritional', 'wellness']),
@@ -48,11 +56,12 @@ export async function POST(req: Request) {
       }, { status: 402 })
     }
 
-    // GRO pre-flight
-    const { mode, harm_score, triggered_terms } = groPreFlight(
+    // GRO pre-flight — elevate to highest of profile setting vs topic scan
+    const { mode: preFlightMode, harm_score, triggered_terms } = groPreFlight(
       params.health_topic,
       params.domains_requested
     )
+    const mode = elevateGROMode(profile.gro_mode as GROMode, preFlightMode)
 
     if (mode === 'CONTAINMENT') {
       return NextResponse.json({
@@ -63,10 +72,7 @@ export async function POST(req: Request) {
       }, { status: 422 })
     }
 
-    // Deduct credit atomically
-    await supabase.rpc('deduct_credit', { p_user_id: user.id })
-
-    // Create HIR record
+    // Create HIR record before deducting credit — prevents lost credits on record creation failure
     const { data: hir, error: hirError } = await supabase
       .from('health_intelligence_reports')
       .insert({
@@ -82,8 +88,19 @@ export async function POST(req: Request) {
 
     if (hirError || !hir) throw new Error('Failed to create HIR record')
 
+    // Deduct credit only after HIR record exists
+    await supabase.rpc('deduct_credit', { p_user_id: user.id })
+
     // Execute HIR pipeline
-    const { downloadUrl } = await generateHIR(hir.id, user.id, params, mode)
+    let downloadUrl: string
+    try {
+      const result = await generateHIR(hir.id, user.id, params, mode)
+      downloadUrl = result.downloadUrl
+    } catch (pipelineError) {
+      // Refund credit if pipeline fails after deduction
+      await supabase.rpc('refund_credit', { p_user_id: user.id, p_hir_id: hir.id })
+      throw pipelineError
+    }
 
     return NextResponse.json({
       hir_id: hir.id,

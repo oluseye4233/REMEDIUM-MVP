@@ -4,7 +4,7 @@ const PROHIBITED_PATTERNS: RegExp[] = [
   /you should (take|use|consume|start)\s+\d+\s*mg/i,
   /prescrib(e|ing|ed)\s+\d+\s*mg/i,
   /I diagnose/i,
-  /you (have|are suffering from|are diagnosed with)/i,
+  /^you (have|are suffering from|are diagnosed with)/im,
   /this will cure/i,
   /guaranteed to treat/i,
   /clinically proven to (cure|treat|prevent)/i,

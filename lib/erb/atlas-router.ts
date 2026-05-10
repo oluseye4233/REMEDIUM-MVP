@@ -31,7 +31,7 @@ export function buildATLASPrompt(sections: string, params: HIRRequest): string {
   }
 
   const requestedSections = sectionList
-    .map((s, i) => `Section ${s} — ${sectionDescriptions[s] || s}`)
+    .map(s => `Section ${s} — ${sectionDescriptions[s] || s}`)
     .join('\n')
 
   return `Generate a comprehensive Health Intelligence Report (HIR) for a verified licensed health practitioner.

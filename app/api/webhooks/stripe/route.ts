@@ -50,7 +50,7 @@ export async function POST(req: Request) {
 
         if (session.mode === 'payment') {
           // Credit purchase
-          const credits = parseInt(session.metadata?.credits || '0')
+          const credits = parseInt(session.metadata?.credits || '0', 10)
           if (credits > 0) {
             await supabase.rpc('add_credits', { p_user_id: userId, p_amount: credits })
             await supabase.from('credit_transactions').insert({
@@ -68,7 +68,11 @@ export async function POST(req: Request) {
         const { data: profile } = await supabase.from('profiles').select('id').eq('stripe_customer_id', customerId).single()
         if (!profile) break
 
-        await supabase.rpc('add_credits', { p_user_id: profile.id, p_amount: 10 })
+        // Look up plan to award correct renewal credits (annual = 120, monthly = 10)
+        const { data: sub } = await supabase.from('subscriptions').select('plan').eq('user_id', profile.id).single()
+        const renewalCredits = sub?.plan === 'personal_annual' ? 120 : 10
+
+        await supabase.rpc('add_credits', { p_user_id: profile.id, p_amount: renewalCredits })
         await supabase.from('subscriptions').update({
           status: 'active',
           renewal_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
